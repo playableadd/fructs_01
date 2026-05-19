@@ -16,35 +16,38 @@ export default class Game extends ParentScene {
         this.totalCards = 8;
         this.collectedCards = 0;
         this.draggingCard = null;
-        this.dragOffset = { x: 0, y: 0 };
 
+        // Background - fills viewport
         this.bg = new Background({
             scene: this,
             pImage: "main_bg", lImage: "main_bg",
-            pScaleX: 1.05, pScaleY: 1.05,
-            lScaleX: 2.1,  lScaleY: 2.1,
+            pScaleX: 1.1, pScaleY: 1.1,
+            lScaleX: 2.2,  lScaleY: 2.2,
             container: this.mainContainer
         });
 
+        // Move counter at top center
         this.moveCounter = new MoveCounter({
             scene: this,
             container: this.mainContainer
         });
 
+        // Collection zones in center vertically
         this.edibleZone = new CollectionZone({
             scene: this,
             zoneType: "edible",
             container: this.mainContainer,
-            px: 0, py: -80
+            px: 0, py: -50
         });
 
         this.notEdibleZone = new CollectionZone({
             scene: this,
             zoneType: "not_edible",
             container: this.mainContainer,
-            px: 0, py: 80
+            px: 0, py: 100
         });
 
+        // Left stack - left side column
         this.leftStack = new CardStack({
             scene: this,
             cards: [
@@ -54,10 +57,11 @@ export default class Game extends ParentScene {
                 { type: "edible", index: 2, faceUp: true }
             ],
             container: this.mainContainer,
-            px: -160, py: 0,
+            px: -200, py: 0,
             stackPosition: "left"
         });
 
+        // Right stack - right side column
         this.rightStack = new CardStack({
             scene: this,
             cards: [
@@ -67,7 +71,7 @@ export default class Game extends ParentScene {
                 { type: "not_edible", index: 4, faceUp: true }
             ],
             container: this.mainContainer,
-            px: 160, py: 0,
+            px: 200, py: 0,
             stackPosition: "right"
         });
 
@@ -76,10 +80,12 @@ export default class Game extends ParentScene {
             container: this.mainContainer
         });
 
+        // Setup input handlers
         this.setupInput();
         
+        // Delay for sizing
         this.time.addEvent({
-            delay: 500,
+            delay: 100,
             callback: () => {
                 this.resizeSquare(this.scale.height / this.scale.width);
                 this.scale.on("resize", () => {
@@ -87,41 +93,29 @@ export default class Game extends ParentScene {
                         this.resizeSquare(this.scale.height / this.scale.width);
                     }, 11);
                 });
+            }
+        });
+        
+        this.time.addEvent({
+            delay: 600,
+            callback: () => {
                 this.makeTopCardsInteractive();
             }
         });
     }
 
     setupInput() {
-        this.input.on("dragstart", (pointer, gameObject) => {
-            if (this.gameOver) return;
-            
-            const topCard = this.getStackTopCard(gameObject);
-            if (!topCard || topCard !== gameObject) return;
-            
-            this.draggingCard = gameObject;
-            gameObject.setDepth(20);
-            
-            gameObject.animate({
-                pScaleX: 0.6,
-                pScaleY: 0.6,
-                duration: 100,
-                ease: "Cubic"
-            });
-        });
-
         this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
             if (!this.draggingCard) return;
-            
-            const offsetX = (pointer.x - pointer.downX) * 0.3;
-            const offsetY = (pointer.y - pointer.downY) * 0.3;
-            
-            gameObject.x = dragX + offsetX;
-            gameObject.y = dragY + offsetY;
+            gameObject.x = dragX;
+            gameObject.y = dragY;
         });
 
         this.input.on("dragend", (pointer, gameObject) => {
-            if (!this.draggingCard || this.gameOver) return;
+            if (!this.draggingCard || this.gameOver) {
+                this.draggingCard = null;
+                return;
+            }
             
             const dropResult = this.checkDropZone(gameObject);
             
@@ -129,86 +123,78 @@ export default class Game extends ParentScene {
                 this.handleCorrectDrop(gameObject, dropResult.zone);
             } else if (dropResult.nearZone) {
                 this.handleWrongDrop(gameObject, dropResult.zone);
+            } else {
+                const stack = this.getCardStack(gameObject);
+                if (stack) {
+                    const origPos = stack.getOriginalCardPosition(gameObject);
+                    this.tweens.add({
+                        targets: gameObject,
+                        x: origPos.x,
+                        y: origPos.y,
+                        duration: 200,
+                        ease: "Cubic"
+                    });
+                }
             }
             
             this.draggingCard = null;
         });
     }
 
-    getStackTopCard(card) {
-        const leftTop = this.leftStack.getTopCard();
-        const rightTop = this.rightStack.getTopCard();
-        
-        if (leftTop === card) return leftTop;
-        if (rightTop === card) return rightTop;
-        
+    getCardStack(card) {
+        if (this.leftStack && this.leftStack.cardsData && this.leftStack.cardsData.indexOf(card) >= 0) {
+            return this.leftStack;
+        }
+        if (this.rightStack && this.rightStack.cardsData && this.rightStack.cardsData.indexOf(card) >= 0) {
+            return this.rightStack;
+        }
         return null;
     }
 
     checkDropZone(card) {
-        const cardWorldPos = { x: card.x, y: card.y };
+        const cardCenterX = card.x;
+        const cardCenterY = card.y;
         
-        const edibleZonePos = this.getWorldPosition(this.edibleZone);
-        const notEdibleZonePos = this.getWorldPosition(this.notEdibleZone);
+        const distToEdible = Phaser.Math.Distance.Between(cardCenterX, cardCenterY, 
+            this.edibleZone.x, this.edibleZone.y);
+        const distToNotEdible = Phaser.Math.Distance.Between(cardCenterX, cardCenterY, 
+            this.notEdibleZone.x, this.notEdibleZone.y);
         
-        const zoneRadius = 80;
+        const dropRadius = 100;
         
-        const distToEdible = Phaser.Math.Distance.Between(
-            cardWorldPos.x, cardWorldPos.y,
-            edibleZonePos.x, edibleZonePos.y
-        );
-        
-        const distToNotEdible = Phaser.Math.Distance.Between(
-            cardWorldPos.x, cardWorldPos.y,
-            notEdibleZonePos.x, notEdibleZonePos.y
-        );
-        
-        if (distToEdible < zoneRadius) {
-            return {
-                dropped: true,
-                zone: this.edibleZone,
-                zonePos: edibleZonePos
-            };
-        } else if (distToNotEdible < zoneRadius) {
-            return {
-                dropped: true,
-                zone: this.notEdibleZone,
-                zonePos: notEdibleZonePos
-            };
-        } else if (distToEdible < zoneRadius * 2 || distToNotEdible < zoneRadius * 2) {
-            const nearestZone = distToEdible < distToNotEdible ? this.edibleZone : this.notEdibleZone;
-            const nearestPos = distToEdible < distToNotEdible ? edibleZonePos : notEdibleZonePos;
-            return {
-                dropped: false,
-                nearZone: true,
-                zone: nearestZone,
-                zonePos: nearestPos
-            };
+        if (distToEdible < dropRadius) {
+            return { dropped: true, zone: this.edibleZone };
+        } else if (distToNotEdible < dropRadius) {
+            return { dropped: true, zone: this.notEdibleZone };
         }
+        
+        const nearRadius = 180;
+        if (distToEdible < nearRadius) return { nearZone: true, zone: this.edibleZone };
+        if (distToNotEdible < nearRadius) return { nearZone: true, zone: this.notEdibleZone };
         
         return { dropped: false, nearZone: false };
     }
 
-    getWorldPosition(container) {
-        const pos = container.getByName("__position");
-        if (pos) {
-            return { x: pos.x, y: pos.y };
-        }
-        return { x: container.x, y: container.y };
-    }
-
     async handleCorrectDrop(card, zone) {
         const cardType = card.getCardType();
-        const zoneType = zone.getZoneType();
         
         if (zone.canAcceptCard(cardType)) {
-            const zonePos = this.getWorldPosition(zone);
+            card.setDepth(30);
             
-            await card.magnetizeTo(zonePos.x, zonePos.y);
+            await new Promise(resolve => {
+                this.tweens.add({
+                    targets: card,
+                    x: zone.x,
+                    y: zone.y,
+                    scaleX: 0.3,
+                    scaleY: 0.3,
+                    duration: 250,
+                    ease: "Cubic",
+                    onComplete: resolve
+                });
+            });
             
-            this.mainContainer.remove(card);
             zone.addCard(card);
-            
             this.collectedCards++;
             this.movesLeft = this.moveCounter.decreaseMoves();
             
@@ -227,26 +213,32 @@ export default class Game extends ParentScene {
 
     async handleWrongDrop(card, zone) {
         zone.showError();
-        
         this.sound.play("fail");
-        
         card.setDepth(10);
         
+        await new Promise(resolve => {
+            this.tweens.add({
+                targets: card,
+                x: "+15",
+                duration: 50,
+                yoyo: true,
+                repeat: 4,
+                onComplete: resolve
+            });
+        });
+        
         const stack = card.parentContainer === this.leftStack ? this.leftStack : this.rightStack;
-        const originalPos = stack.getOriginalCardPosition(card);
+        const origPos = stack.getOriginalCardPosition(card);
         
-        await card.shake();
-        
-        card.scene.tweens.add({
+        this.tweens.add({
             targets: card,
-            x: originalPos.x,
-            y: originalPos.y,
-            duration: 300,
+            x: origPos.x,
+            y: origPos.y,
+            duration: 200,
             ease: "Cubic"
         });
         
         this.movesLeft = this.moveCounter.decreaseMoves();
-        
         this.checkWinCondition();
     }
 
@@ -266,14 +258,31 @@ export default class Game extends ParentScene {
         const leftTop = this.leftStack.getTopCard();
         const rightTop = this.rightStack.getTopCard();
 
+        if (leftTop) {
+            leftTop.disableInteractive();
+            leftTop.removeAllListeners("pointerdown");
+        }
+        if (rightTop) {
+            rightTop.disableInteractive();
+            rightTop.removeAllListeners("pointerdown");
+        }
+
         if (leftTop && leftTop.isCardFaceUp()) {
             leftTop.setInteractive();
-            leftTop.input.setDraggable();
+            leftTop.on("pointerdown", () => {
+                if (this.gameOver) return;
+                this.draggingCard = leftTop;
+                leftTop.setDepth(20);
+            });
         }
 
         if (rightTop && rightTop.isCardFaceUp()) {
             rightTop.setInteractive();
-            rightTop.input.setDraggable();
+            rightTop.on("pointerdown", () => {
+                if (this.gameOver) return;
+                this.draggingCard = rightTop;
+                rightTop.setDepth(20);
+            });
         }
     }
 
