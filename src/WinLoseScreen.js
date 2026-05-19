@@ -9,7 +9,10 @@ export default class WinLoseScreen extends Phaser.GameObjects.Container {
     }
 
     create(container) {
-        this.overlay = this.scene.add.rectangle(0, 0, 2000, 2000, 0x000000, 0.7).setDepth(50).setOrigin(0.5, 0.5);
+        this.overlay = this.scene.add.graphics();
+        this.overlay.fillStyle(0x000000, 0.7);
+        this.overlay.fillRect(-1000, -1000, 2000, 2000);
+        this.overlay.setDepth(50);
         this.add(this.overlay);
         this.overlay.setAlpha(0);
 
