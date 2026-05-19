@@ -1,5 +1,5 @@
 module.exports = {
-    'name': 'Boilerplate',
+    'name': 'Contrasting_Themes',
     'networks': ['Applovin', 'Facebook', 'Google', 'IronSource', 'Liftoff', 'TikTok', 'UnityAds', 'Vungle'],
     'customPhaser': true,
     'compressAtlas': true,

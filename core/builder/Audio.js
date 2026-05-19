@@ -5,6 +5,12 @@ const config = require('../../config');
 
 module.exports.load = function() {
 	fs.readdir('assets/audio', (err, names) => {
+        if (err) {
+            this.audioLoaded = true;
+            this.loadChunck();
+            return;
+        }
+        
         let audio = false;
         for (const title of names) {
             const type = title.slice(title.length - 3, title.length);
@@ -31,9 +37,22 @@ module.exports.load = function() {
         }
         
         audiosprite(files, opts, (err, obj) => {
+            if (err) {
+                console.log('Audio processing failed, skipping:', err.message);
+                this.audioLoaded = true;
+                this.loadChunck();
+                return;
+            }
+            
             this.resources += 'window.App.resources.audio.' + 'json' + ' = ' + JSON.stringify(obj) + ';';
 
             fs.readFile('temp/audio.ogg', (err, file) => {
+                if (err) {
+                    this.audioLoaded = true;
+                    this.loadChunck();
+                    return;
+                }
+                
                 const ogg = file.toString('base64');
                 this.resources += 'window.App.resources.audio.' + 'ogg' + ' = ' + "'" + ogg + "'" + ';';
 
